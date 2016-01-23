@@ -1,0 +1,25 @@
+{
+  "name": "sdkuservisualisation",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/simo101/sdkuservisualisation.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/simo101/sdkuservisualisation/issues"
+  },
+  "homepage": "https://github.com/simo101/sdkuservisualisation",
+  "dependencies": {
+    "mendixmodelsdk": "^1.1.1",
+    "mendixplatformsdk": "^1.0.2",
+    "when": "^3.7.7"
+  }
+}
