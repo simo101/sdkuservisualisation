@@ -20,6 +20,8 @@
   "dependencies": {
     "mendixmodelsdk": "^1.1.1",
     "mendixplatformsdk": "^1.0.2",
-    "when": "^3.7.7"
+    "when": "^3.7.7",
+    "node": "^0.0.0",
+    "json-writer": "^1.0.2"
   }
 }
