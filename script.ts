@@ -1,14 +1,14 @@
 /// <reference path='./typings/tsd.d.ts' />
 
 import { MendixSdkClient, OnlineWorkingCopy, Project, Revision, Branch } from "mendixplatformsdk";
-import { ModelSdkClient, IModel, projects, domainmodels, microflows, pages, navigation, texts } from "mendixmodelsdk";
+import { ModelSdkClient, IModel, projects, domainmodels, microflows, pages, navigation, texts, security } from "mendixmodelsdk";
 import when = require('when');
 //const readlineSync = require('readline-sync');
 
 /*
  * CREDENTIALS
  */
-const JSONWriter = require('json-writer');
+var  JSONWriter = require('json-writer');
 var jw = new JSONWriter;
 const username = "{USER NAME}";
 const apikey = "{API KEY}";
@@ -25,7 +25,7 @@ const client = new MendixSdkClient(username, apikey);
 const project = new Project(client, projectId, projectName);
 
 client.platform().createOnlineWorkingCopy(project, new Revision(revNo, new Branch(project, branchName)))
-    .then(workingCopy => loadNavigationDocuments(workingCopy)
+    .then(workingCopy => processUserNavigation(workingCopy)
     .then(navigationDoc => processNavigation(navigationDoc))
     .done(
         () => {
@@ -36,8 +36,11 @@ client.platform().createOnlineWorkingCopy(project, new Revision(revNo, new Branc
             console.dir(error);
         }));
  
-function loadNavigationDocuments(workingCopy: OnlineWorkingCopy): when.Promise<navigation.NavigationDocument> {
+function loadNavigationDocuments(role: security.UserRole, workingCopy: OnlineWorkingCopy): when.Promise<navigation.NavigationDocument> {
     const navigation = pickNavigationDocument(workingCopy);
+    workingCopy.model().allNavigationDocuments().filter[0];
+    
+    
     return when.promise<navigation.NavigationDocument>((resolve, reject) => {
         navigation.load(nav => resolve(nav));
     });
@@ -47,37 +50,74 @@ function pickNavigationDocument(workingCopy: OnlineWorkingCopy): navigation.Navi
     return workingCopy.model().allNavigationDocuments().filter[0];
 }
 
-function processNavigation (navDoc: navigation.NavigationDocument): navigation.NavigationDocument {
+function processNavigation (role: security.UserRole, navDoc: navigation.NavigationDocument): navigation.NavigationDocument {
     
     let homepage = navDoc.desktopProfile.homePage;
-    navDoc.desktopProfile.roleBasedHomePages.forEach(roleBasedHomepage => {
-        let userRoleName = roleBasedHomepage.userRole.name;
-        let rolePage = roleBasedHomepage.page;
-        let roleMicroflow = roleBasedHomepage.microflow;
-        
+    let usersHomepage = navDoc.desktopProfile.roleBasedHomePages.filter(roleBasedHomepage => roleBasedHomepage.userRole.name === role.name)[0];
+
+    if (usersHomepage.page != null){
+        jw.writeElement(usersHomepage.page.name);
+        traversePage(usersHomepage.page);
+    }else if(usersHomepage.microflow != null){
+        jw.writeElement(usersHomepage.microflow.name);
+        traverseMicroflow(usersHomepage.microflow);    
     }
-    );
-    if (homepage.page != null){
-        var homepagePage = homepage.page;
-    }else if(homepage.microflow != null){    
-    }
-    else{
-        
-    }
+    jw.endElement();
     return navDoc;
 };
-function userRoles(workingCopy: OnlineWorkingCopy){
+function processUserNavigation(workingCopy: OnlineWorkingCopy){
+    jw.startDocument();
     workingCopy.model().allProjectSecurities()[0].userRoles.forEach(role =>{
+        jw.startElement(role.name);
         
-        jw.startDocument().startElement(role.name);
-    }
-    )
+        loadNavigationDocuments(role);
+        jw.endElement();
+        
+    });
+    jw.endDocument();
+    
 }
 
-function traverseMicroflow(microflow: microflows.Microflow){
-    microflow.objectCollection.objects.filter(o => o instanceof microflows.ShowPageAction || o instanceof microflows.ShowHomePageAction ).forEach((o) => {
-        
+function traversePage(page: pages.IPage){
+    page.load(pageLoaded =>{
+        pageLoaded.layoutCall.load(layout =>{
+            layout.
+        })
     });
-    microflow.objectCollection.objects.filter(o => o instanceof microflows.MicroflowParameter).forEach((o) => { 
-    });
+    
 }
+
+function traverseMicroflow(microflow: microflows.IMicroflow){
+    microflow.load(mf =>{
+        //process pages
+        mf.objectCollection.objects.filter(o => o instanceof microflows.ShowPageAction).forEach(showPage => {
+           var activity = <microflows.ActionActivity> showPage;
+           var action = activity.action;
+            if(action instanceof microflows.ShowPageAction){
+               jw.writeElement(action.pageSettings.page.name);
+               traversePage(action.pageSettings.page);
+               jw.endElement();
+            }
+           });
+           //process show hompage action
+           mf.objectCollection.objects.filter(o => o instanceof microflows.ShowHomePageAction).forEach(showPage => {
+                jw.writeElement(`Show Homepage`);
+                jw.endElement();
+           });
+           //process show microflows
+           mf.objectCollection.objects.filter(o => o instanceof microflows.MicroflowCallAction).forEach((mfPara) => { 
+              
+           var activity = <microflows.ActionActivity> mfPara;
+           var action = activity.action;
+           
+            if(action instanceof microflows.MicroflowCallAction){
+               jw.writeElement(action.microflowCall.microflow.name);
+               traverseMicroflow(action.microflowCall.microflow);
+               jw.endElement();
+            }
+           
+          });
+           
+        });
+        
+    }
