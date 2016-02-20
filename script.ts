@@ -80,10 +80,23 @@ function processUserNavigation(workingCopy: OnlineWorkingCopy){
 
 function traversePage(page: pages.IPage){
     page.load(pageLoaded =>{
+        
         pageLoaded.layoutCall.load(layout =>{
-            layout.
+            var layoutCall = <pages.LayoutCall> layout;
+            layoutCall.arguments.forEach(args =>{
+                var widget = args.widget;
+                
+                if(widget instanceof pages.VerticalFlow){
+                    processVerticalFlow(widget);
+                }
+                
+            });
         })
     });
+    
+}
+
+function processVerticalFlow(verticalFlow: pages.VerticalFlow){
     
 }
 
