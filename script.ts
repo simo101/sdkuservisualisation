@@ -18,10 +18,10 @@ var jw = new JSONWriter(false, function(string, encoding) {
       ws.write(string, encoding);
   });
 
-const username = "";
-const apikey = "{API KEY}";
-const projectId = "{PROJECT ID}";
-const projectName = "{PROJECT NAME}";
+const username = "{{Username}}";
+const apikey = "{{APIKEY}}";
+const projectId = "{{ProjectID}}";
+const projectName = "{{ProjectName}}";
 const revNo = -1; // -1 for latest
 const branchName = null // null for mainline
 
@@ -44,15 +44,18 @@ client.platform().createOnlineWorkingCopy(project, new Revision(revNo, new Branc
             console.dir(error);
         });
         
-function pickNavigationDocument(workingCopy: OnlineWorkingCopy): navigation.NavigationDocument {
-    return workingCopy.model().allNavigationDocuments().filter[0];
+function pickNavigationDocument(workingCopy: OnlineWorkingCopy): navigation.INavigationDocument {
+    workingCopy.model().allNavigationDocuments().forEach(nav => {
+        return nav;
+    });
+    return null;
 }
 
 function processNavigation (role: security.IUserRole, navDoc: navigation.NavigationDocument){
     
     let homepage = navDoc.desktopProfile.homePage;
     let usersHomepage = navDoc.desktopProfile.roleBasedHomePages.filter(roleBasedHomepage => roleBasedHomepage.userRole.name === role.name)[0];
-
+    
     if (usersHomepage.page != null){
         jw.writeElement(usersHomepage.page.name);
         traversePage(usersHomepage.page);
@@ -67,7 +70,11 @@ function processUserNavigation(workingCopy: OnlineWorkingCopy){
     jw.startDocument('1.0', 'UTF-8');
     workingCopy.model().allProjectSecurities()[0].userRoles.forEach(role =>{
         jw.startElement(role.name);
-        processNavigation(role,pickNavigationDocument(workingCopy));
+        loadAsPromise(pickNavigationDocument(workingCopy)).then(
+          navigation =>{
+              processNavigation(role,navigation);
+          }  
+        );
         jw.endElement();
     });
     jw.endDocument();
