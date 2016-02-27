@@ -8,15 +8,16 @@ import when = require('when');
 /*
  * CREDENTIALS
  */
-var JSONWriter = require('json-writer');
+// var JSONWriter = require('json-writer');
 var fs = require('fs');
 var ws = fs.createWriteStream('./tmp/mendix.json');
-ws.on('close', function() {
-    console.log(fs.readFileSync('./tmp/mendix.json', 'UTF-8'));
-});
-var jw = new JSONWriter(false, function(string, encoding) {
-    ws.write(string, encoding);
-});
+// ws.on('close', function() {
+//     console.log(fs.readFileSync('./tmp/mendix.json', 'UTF-8'));
+// });
+// var jw = new JSONWriter(false, function(string, encoding) {
+//     ws.write(string, encoding);
+// });
+const jsonObj = {};
 
 const username = "simon.black@mendix.com";
 const apikey = "ba47d0a1-9991-45ee-a14d-d0c1b73d5279";
@@ -36,7 +37,8 @@ client.platform().createOnlineWorkingCopy(project, new Revision(revNo, new Branc
     .then(workingCopy => processUserNavigation(workingCopy))
     .done(
     () => {
-        
+        var jsonString = JSON.stringify(jsonObj);
+        ws.write(jsonString);
         ws.end();
         console.log("Done.");
     },
@@ -49,81 +51,76 @@ function pickNavigationDocument(workingCopy: OnlineWorkingCopy): navigation.INav
     return workingCopy.model().allNavigationDocuments()[0];
 }
 
-function processNavigation(role: security.IUserRole, navDoc: navigation.NavigationDocument): when.Promise<void> {
+function processNavigation(role: security.IUserRole, navDoc: navigation.NavigationDocument,element): when.Promise<void> {
 
     let homepage = navDoc.desktopProfile.homePage;
     let usersHomepage = navDoc.desktopProfile.roleBasedHomePages.filter(roleBasedHomepage => roleBasedHomepage.userRole.name === role.name)[0];
-    if (usersHomepage != null){    
+    if (usersHomepage != null) {
         if (usersHomepage.page != null) {
-            jw.writeElement(usersHomepage.page.name);
+            element[usersHomepage.page.name] = {};
             console.log(`${role.name} homepage = ${usersHomepage.page.name}`);
-            return traversePage(usersHomepage.page).then(_=>{jw.endElement()});
+            return traversePage(usersHomepage.page,element[usersHomepage.page.name]);
         } else if (usersHomepage.microflow != null) {
-            jw.writeElement(usersHomepage.microflow.name);
+            element[usersHomepage.microflow.name] = {};
             console.log(`${role.name} homepage = ${usersHomepage.microflow.name}`);
-            return traverseMicroflow(usersHomepage.microflow).then(_=>{jw.endElement()});
-            
+            return traverseMicroflow(usersHomepage.microflow,element[usersHomepage.microflow.name]);
+
         }
     }
+    return;
 };
 function processUserNavigation(workingCopy: OnlineWorkingCopy): when.Promise<void> {
-    jw.startDocument('1.0', 'UTF-8');
+    // jw.startDocument('1.0', 'UTF-8');
     return loadAsPromise(workingCopy.model().allProjectSecurities()[0]).then(
         projectSecurity => {
             var navigationDoc = workingCopy.model().allNavigationDocuments()[0];
-            console.log('Project Security Loaded');
-            projectSecurity.userRoles.forEach(role => {
-                jw.startElement(role.name);
-                
-                if(navigationDoc != null){
-                    loadAsPromise(navigationDoc).then(
-                        navigation => {
-                            console.log(`Processing user navigation for: ${role.name}`);
-                            processNavigation(role, navigation);
-                        }
-                    ).then(jw.endElement());
-           
+            if (navigationDoc != null) {
+                console.log('Project Security Loaded');
+                loadAsPromise(navigationDoc).then(navigation => {
+                    projectSecurity.userRoles.forEach(role => {
+                        jsonObj[role.name] = {};
+                        console.log(`Processing user navigation for: ${role.name}`);
+                        processNavigation(role, navigation,jsonObj[role.name]);
+                    }
+                    );
+
+
+                });
+
             }
         });
-        });
+
 }
 
-function traversePage(page: pages.IPage): when.Promise<void> {
+function traversePage(page: pages.IPage,element): when.Promise<void> {
     console.log(`Traversing page: ${page.name}`);
     return loadAsPromise(page).then(pageLoaded => {
-        jw.writeElement(page.name);
+        element[page.name] = {};
         pageLoaded.traversePublicParts(visit => {
             if (visit instanceof pages.ActionButton) {
-                processButton(visit);
+                processButton(visit, element);
             }
         })
-    }).then(_=>{jw.endElement()});
+    });
 
 }
 
-function processVerticalFlow(verticalFlow: pages.VerticalFlow) {
-    verticalFlow.widgets.forEach(widget => {
-        if (widget instanceof pages.ActionButton) {
-            processButton(widget);
-        }
-    })
-}
-function processButton(button: pages.ActionButton): when.Promise<void> {
+function processButton(button: pages.ActionButton,element): when.Promise<void> {
     var action = button.action;
     if (action instanceof pages.MicroflowClientAction) {
-        if(action.microflowSettings.microflow != null){
-            return traverseMicroflow(action.microflowSettings.microflow);
+        if (action.microflowSettings.microflow != null) {
+            return traverseMicroflow(action.microflowSettings.microflow,element);
         }
     }
     else if (action instanceof pages.PageClientAction) {
-        if(action.pageSettings.page != null){
-            return traversePage(action.pageSettings.page);
+        if (action.pageSettings.page != null) {
+            return traversePage(action.pageSettings.page,element);
         }
     }
 }
 
 
-function traverseMicroflow(microflow: microflows.IMicroflow): when.Promise<void> {
+function traverseMicroflow(microflow: microflows.IMicroflow,element): when.Promise<void> {
     console.log(`Traversing microflow: ${microflow.name}`);
     return loadAsPromise(microflow).then(mf=> {
         //process pages
@@ -131,15 +128,13 @@ function traverseMicroflow(microflow: microflows.IMicroflow): when.Promise<void>
             var activity = <microflows.ActionActivity>showPage;
             var action = activity.action;
             if (action instanceof microflows.ShowPageAction) {
-                jw.writeElement(action.pageSettings.page.name);
-                traversePage(action.pageSettings.page);
-                jw.endElement();
+                element[action.pageSettings.page.name] = {};
+                traversePage(action.pageSettings.page,element[action.pageSettings.page.name]);
             }
         });
         //process show hompage action
         mf.objectCollection.objects.filter(o => o instanceof microflows.ShowHomePageAction).forEach(showPage => {
-            jw.writeElement(`Show Homepage`);
-            jw.endElement();
+            element[`Show Homepage`] = {};
         });
         //process show microflows
         mf.objectCollection.objects.filter(o => o instanceof microflows.MicroflowCallAction).forEach((mfPara) => {
@@ -148,8 +143,8 @@ function traverseMicroflow(microflow: microflows.IMicroflow): when.Promise<void>
             var action = activity.action;
 
             if (action instanceof microflows.MicroflowCallAction) {
-                jw.writeElement(action.microflowCall.microflow.name);
-                traverseMicroflow(action.microflowCall.microflow).then(_ =>{jw.endElement();});   
+                element[action.microflowCall.microflow.name] = {};
+                traverseMicroflow(action.microflowCall.microflow,element[action.microflowCall.microflow.name]);
             }
 
         });
