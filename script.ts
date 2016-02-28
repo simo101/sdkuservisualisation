@@ -60,10 +60,10 @@ function processNavigation(role: security.IUserRole, nav: navigation.INavigation
         if (usersHomepage != null) {
             if (usersHomepage.page != null) {
                 console.log(`${role.name} homepage = ${usersHomepage.page.name}`);
-                return traversePage(usersHomepage.page, element);
+                return loadPage(usersHomepage.page).then(pg => { traversePage(pg, element) });
             } else if (usersHomepage.microflow != null) {
                 console.log(`${role.name} homepage = ${usersHomepage.microflow.name}`);
-                traverseMicroflow(usersHomepage.microflow, element);
+                return loadMicroflow(usersHomepage.microflow).then(mf => { traverseMicroflow(mf, element) });
             }
         }
         return;
@@ -87,92 +87,94 @@ function processUsersNavigation(role: security.UserRole): when.Promise<void> {
     return processNavigation(role, nav, jsonObj[role.name]);
 }
 
+function loadPage(page: pages.IPage): when.Promise<pages.Page> {
+    return loadAsPromise(page);
+}
 
-function traversePage(page: pages.IPage, element): when.Promise<void> {
-    console.log(`Traversing page: ${page.name}`);
-    return loadAsPromise(page).then(pageLoaded => {
-        element[page.name] = {};
-        pageLoaded.traverse(function(structure){
-            traverseElement(element[page.name], structure);
-        });
+function traversePage(pageLoaded: pages.Page, element){
+    console.log(`Traversing page: ${pageLoaded.name}`);
+    element[pageLoaded.name] = {};
+    pageLoaded.traverse(function(structure):when.Promise<void> {
+        return traverseElement(element[pageLoaded.name], structure);
     });
-
 }
 function traverseElement(element, structure: IStructure): when.Promise<void> {
     if (structure != null) {
         if (structure instanceof pages.Button) {
-           return processButton(structure, element);
-        } else if(structure instanceof pages.ControlBarButton){
-           return processControlBarButton(structure,element);
+            return processButton(structure, element);
+        } else if (structure instanceof pages.ControlBarButton) {
+            return processControlBarButton(structure, element);
         }
-    } 
-        return;
+    }
+    return;
 }
 
 function processControlBarButton(button: pages.ControlBarButton, element): when.Promise<void> {
-    if(button instanceof pages.GridEditButton){
-        return traversePage(button.pageSettings.page,element);
-    }else if(button instanceof pages.DataViewActionButton){
+    if (button instanceof pages.GridEditButton) {
+        return loadPage(button.pageSettings.page).then(pg => { traversePage(pg, element) });
+    } else if (button instanceof pages.DataViewActionButton) {
         var action = button.action;
-        if(action instanceof pages.MicroflowClientAction){
-            return traverseMicroflow(action.microflowSettings.microflow,element);
-        }else if (action instanceof pages.PageClientAction){
-            return traversePage(action.pageSettings.page,element);
+        if (action instanceof pages.MicroflowClientAction) {
+            return loadMicroflow(action.microflowSettings.microflow).then(mf=> { traverseMicroflow(mf, element) });
+        } else if (action instanceof pages.PageClientAction) {
+            return loadPage(action.pageSettings.page).then(pg => { traversePage(pg, element) });
         }
     }
 }
 
 
 function processButton(button: pages.Button, element): when.Promise<void> {
-    if(button instanceof pages.ActionButton){
+    if (button instanceof pages.ActionButton) {
         var action = button.action;
         if (action instanceof pages.MicroflowClientAction) {
             if (action.microflowSettings.microflow != null) {
-                return traverseMicroflow(action.microflowSettings.microflow, element);
+                return loadMicroflow(action.microflowSettings.microflow).then(mf=> { traverseMicroflow(mf, element) });
             }
         }
         else if (action instanceof pages.PageClientAction) {
             if (action.pageSettings.page != null) {
-                return traversePage(action.pageSettings.page, element);
+                return loadPage(action.pageSettings.page).then(pg=> { traversePage(pg, element) });
             }
         }
-    }else if(button instanceof pages.DropDownButton){
-        
-    }else if(button instanceof pages.NewButton){
-        return traversePage(button.pageSettings.page,element);  
+    } else if (button instanceof pages.DropDownButton) {
+
+    } else if (button instanceof pages.NewButton) {
+        return loadPage(button.pageSettings.page).then(pg => { traversePage(pg, element) });
     }
 }
 
+function traverseMicroflowActions(actions: microflows.MicroflowObject[], element): when.Promise<void> {
+    return when.all<void>(actions.map(act=> { processAction(act, element) }));
+}
 
-function traverseMicroflow(microflow: microflows.IMicroflow, element): when.Promise<void> {
-    console.log(`Traversing microflow: ${microflow.name}`);
-    return loadAsPromise(microflow).then(mf=> {
-        //process pages
-        mf.objectCollection.objects.filter(o => o instanceof microflows.ShowPageAction).forEach(showPage => {
-            var activity = <microflows.ActionActivity>showPage;
-            var action = activity.action;
-            if (action instanceof microflows.ShowPageAction) {
-                element[action.pageSettings.page.name] = {};
-                traversePage(action.pageSettings.page, element[action.pageSettings.page.name]);
-            }
-        });
-        //process show hompage action
-        mf.objectCollection.objects.filter(o => o instanceof microflows.ShowHomePageAction).forEach(showPage => {
-            element[`Show Homepage`] = {};
-        });
-        //process show microflows
-        mf.objectCollection.objects.filter(o => o instanceof microflows.MicroflowCallAction).forEach((mfPara) => {
+function processAction(mfAction: microflows.MicroflowObject, element): when.Promise<void> {
+    if (mfAction instanceof microflows.ShowPageAction) {
+        var activity = <microflows.ActionActivity>mfAction;
+        var action = activity.action;
+        if (action instanceof microflows.ShowPageAction) {
+            return loadPage(action.pageSettings.page).then(pg => { traversePage(pg, element) });
+        }
+    }
+    else if (mfAction instanceof microflows.ShowHomePageAction) {
+        element["Show Homepage"];
+    } else if (mfAction instanceof microflows.MicroflowCallAction) {
+        var activity = <microflows.ActionActivity>mfAction;
+        var action = activity.action;
+        if (action instanceof microflows.MicroflowCallAction) {
+            return loadMicroflow(action.microflowCall.microflow).then(mf => {
+                traverseMicroflow(mf, element)
+            })
 
-            var activity = <microflows.ActionActivity>mfPara;
-            var action = activity.action;
+        }
+    }
+}
 
-            if (action instanceof microflows.MicroflowCallAction) {
-                element[action.microflowCall.microflow.name] = {};
-                traverseMicroflow(action.microflowCall.microflow, element[action.microflowCall.microflow.name]);
-            }
+function loadMicroflow(microflow: microflows.IMicroflow): when.Promise<microflows.Microflow> {
+    return loadAsPromise(microflow);
+}
 
-        });
-
-    });
-
+function traverseMicroflow(microflow: microflows.Microflow, element): when.Promise<void> {
+    console.log(`Traversing Microflow for: ${microflow.name}`);
+    element[microflow.name] = {};
+    return traverseMicroflowActions(microflow.objectCollection.objects.filter(o => o instanceof microflows.ShowPageAction || o instanceof microflows.ShowHomePageAction || o instanceof microflows.MicroflowCallAction), element[microflow.name]);
 }
