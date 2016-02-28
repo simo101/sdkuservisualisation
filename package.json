@@ -22,7 +22,6 @@
     "mendixplatformsdk": "^1.0.2",
     "when": "^3.7.7",
     "node": "^0.0.0",
-    "json-writer": "^1.0.2",
     "fs": "^0.0.2"
   }
 }

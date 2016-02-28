@@ -27,7 +27,6 @@ const revNo = -1; // -1 for latest
 const branchName = null // null for mainline
 const wc = null;
 const client = new MendixSdkClient(username, apikey);
-var nav = <navigation.NavigationDocument>nav;
 /*
  * PROJECT TO ANALYZE
  */
@@ -60,7 +59,7 @@ function processNavigation(role: security.IUserRole, nav: navigation.INavigation
         if (usersHomepage != null) {
             if (usersHomepage.page != null) {
                 console.log(`${role.name} homepage = ${usersHomepage.page.name}`);
-                return loadPage(usersHomepage.page).then(pg => { traversePage(pg, element) });
+                return loadPage(usersHomepage.page).then(pg => { processButtons(element, getStructures(pg, element)) });
             } else if (usersHomepage.microflow != null) {
                 console.log(`${role.name} homepage = ${usersHomepage.microflow.name}`);
                 return loadMicroflow(usersHomepage.microflow).then(mf => { traverseMicroflow(mf, element) });
@@ -91,13 +90,33 @@ function loadPage(page: pages.IPage): when.Promise<pages.Page> {
     return loadAsPromise(page);
 }
 
-function traversePage(pageLoaded: pages.Page, element){
+function getStructures(pageLoaded: pages.Page, element): IStructure[] {
     console.log(`Traversing page: ${pageLoaded.name}`);
     element[pageLoaded.name] = {};
-    pageLoaded.traverse(function(structure):when.Promise<void> {
-        return traverseElement(element[pageLoaded.name], structure);
+    var buttons = [];
+    pageLoaded.traverse(function(structure) {
+        if (structure instanceof pages.Button || structure instanceof pages.ControlBarButton) {
+            buttons.push(structure);
+        }
     });
+    return buttons;
 }
+
+function traversePage(pageLoaded: pages.Page, element): when.Promise<void> {
+    console.log(`Traversing page: ${pageLoaded.name}`);
+    element[pageLoaded.name] = {};
+    var buttons = [];
+    pageLoaded.traverse(function(structure) {
+        if (structure instanceof pages.Button || structure instanceof pages.ControlBarButton) {
+            buttons.push(structure);
+        }
+    });
+    return processButtons(element[pageLoaded.name], buttons);
+}
+function processButtons(element, buttons: IStructure[]): when.Promise<void> {
+    return when.all<void>(buttons.map(btn => { traverseElement(element, btn) }));
+}
+
 function traverseElement(element, structure: IStructure): when.Promise<void> {
     if (structure != null) {
         if (structure instanceof pages.Button) {
@@ -106,18 +125,17 @@ function traverseElement(element, structure: IStructure): when.Promise<void> {
             return processControlBarButton(structure, element);
         }
     }
-    return;
 }
 
 function processControlBarButton(button: pages.ControlBarButton, element): when.Promise<void> {
     if (button instanceof pages.GridEditButton) {
-        return loadPage(button.pageSettings.page).then(pg => { traversePage(pg, element) });
+        return loadPage(button.pageSettings.page).then(pg => { processButtons(element, getStructures(pg, element)) });
     } else if (button instanceof pages.DataViewActionButton) {
         var action = button.action;
         if (action instanceof pages.MicroflowClientAction) {
             return loadMicroflow(action.microflowSettings.microflow).then(mf=> { traverseMicroflow(mf, element) });
         } else if (action instanceof pages.PageClientAction) {
-            return loadPage(action.pageSettings.page).then(pg => { traversePage(pg, element) });
+            return loadPage(action.pageSettings.page).then(pg => { processButtons(element, getStructures(pg, element)) });
         }
     }
 }
@@ -133,13 +151,13 @@ function processButton(button: pages.Button, element): when.Promise<void> {
         }
         else if (action instanceof pages.PageClientAction) {
             if (action.pageSettings.page != null) {
-                return loadPage(action.pageSettings.page).then(pg=> { traversePage(pg, element) });
+                return loadPage(action.pageSettings.page).then(pg=> { processButtons(element, getStructures(pg, element)) });
             }
         }
     } else if (button instanceof pages.DropDownButton) {
 
     } else if (button instanceof pages.NewButton) {
-        return loadPage(button.pageSettings.page).then(pg => { traversePage(pg, element) });
+        return loadPage(button.pageSettings.page).then(pg => { processButtons(element, getStructures(pg, element)) });
     }
 }
 
@@ -152,7 +170,7 @@ function processAction(mfAction: microflows.MicroflowObject, element): when.Prom
         var activity = <microflows.ActionActivity>mfAction;
         var action = activity.action;
         if (action instanceof microflows.ShowPageAction) {
-            return loadPage(action.pageSettings.page).then(pg => { traversePage(pg, element) });
+            return loadPage(action.pageSettings.page).then(pg => { processButtons(element, getStructures(pg, element)) });
         }
     }
     else if (mfAction instanceof microflows.ShowHomePageAction) {
