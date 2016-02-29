@@ -19,10 +19,10 @@ var ws = fs.createWriteStream('./tmp/mendix.json');
 // });
 const jsonObj = {};
 
-const username = "simon.black@mendix.com";
-const apikey = "ba47d0a1-9991-45ee-a14d-d0c1b73d5279";
-const projectId = "bce92469-dd44-4414-a7fb-af659a2cee44";
-const projectName = "NaturesPrideDemo";
+const username = "{{UserName}}";
+const apikey = "{{ApiKey}}";
+const projectId = "{{ProjectID}}";
+const projectName = "{{ProjectName}}";
 const revNo = -1; // -1 for latest
 const branchName = null // null for mainline
 const wc = null;
