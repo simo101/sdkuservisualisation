@@ -4,6 +4,7 @@
 		"target": "es5"
 	},
 	"files": [
-		"script.ts"
+		"script.ts",
+        "httpserver.ts"
 	]
 }
