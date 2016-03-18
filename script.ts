@@ -13,7 +13,7 @@ var ws = fs.createWriteStream('./web/mendix.json');
 
 const jsonObj = {};
 
-const username = "simon.black@mendix.com";
+const username = "{{Username}}";
 const apikey = "{{ApKey}}";
 const projectId = "{{ProjectID}}";
 const projectName = "{{ProjectName}}";
