@@ -28,3 +28,5 @@ Then after compiled type:
 `node script.js`
 
 This will start running the script. Once the script has completed visualising your project it will load up a browser to display the visualisation.
+
+<img src="img/visualisation.png></img>
