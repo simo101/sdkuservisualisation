@@ -6,9 +6,13 @@ To install the sdkuservisualisation you should type the command:
 `npm install`
 This is will install the sdk visualisation and all the relevant dependencies.
 To connect it to your project you need to change the following constants in the `script.ts`
+
 `var username = "{{Username}}";`
+
 `var apikey = "{{ApiKey}}";`
+
 `var projectId = "{{ProjectId}}";`
+
 `var projectName = "{{ProjectName}}";`
 
 API keys can be found in the mendix home portal.
