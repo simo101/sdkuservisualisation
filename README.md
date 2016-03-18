@@ -3,7 +3,9 @@
 To set up and use the sdk you need to have node js installed on your machine.
 Open up the folder using node.js.
 To install the sdkuservisualisation you should type the command:
+
 `npm install`
+
 This is will install the sdk visualisation and all the relevant dependencies.
 To connect it to your project you need to change the following constants in the `script.ts`
 
