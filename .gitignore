@@ -1,5 +1,5 @@
 node_modules/
 typings/
-*.js
+script.js
 *nbproject
 .vscode/

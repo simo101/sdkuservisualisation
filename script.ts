@@ -13,10 +13,10 @@ var ws = fs.createWriteStream('./web/mendix.json');
 
 const jsonObj = {};
 
-const username = "{{Username}}";
-const apikey = "{{ApKey}}";
-const projectId = "{{ProjectID}}";
-const projectName = "{{ProjectName}}";
+const username = "simon.black@mendix.com";
+const apikey = "9d19e3cd-5498-4a68-9c5b-2fab73309af8";
+const projectId = "bce92469-dd44-4414-a7fb-af659a2cee44";
+const projectName = "NaturesPride";
 const revNo = -1; // -1 for latest
 const branchName = null // null for mainline
 const wc = null;
@@ -229,7 +229,7 @@ function processButton(button: pages.Button, element, userRole: security.UserRol
     } else if (button instanceof pages.DropDownButton) {
 
     } else if (button instanceof pages.NewButton) {
-        return loadPage(button.pageSettings.page).then(pg => processButtons(element, pg, userRole));
+        return loadPage(button.pageSettings.page).then(pg =>processButtons(element, pg, userRole));
     }
 }
 
