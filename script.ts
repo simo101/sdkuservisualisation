@@ -181,9 +181,9 @@ function getStructures(pageLoaded: pages.Page, element): IStructure[] {
 function processButtons(element, page: pages.Page, userRole: security.UserRole): when.Promise<void> {
     if (checkPageSecurity(page, userRole)) {
         var buttons = getStructures(page, element);
+        var child = { name: page.name, children: [], parent: element.name };
+        element["children"].push(child);
         if (!checkIfInElement(page.name, element)) {
-            var child = { name: page.name, children: [], parent: element.name };
-            element["children"].push(child);
             return when.all<void>(buttons.map(btn => traverseElement(child, btn, userRole)));
         } else {
             return;
@@ -257,7 +257,7 @@ function processAction(mfObj: microflows.IMicroflowObject, element, userRole: se
 
         var action = mfObj.action;
         if (action instanceof microflows.ShowPageAction) {
-            console.log(`microflow action to open page ${action.pageSettings.page}`);
+            console.log(`Microflow action to open page ${action.pageSettings.page.name}`);
             return loadPage(action.pageSettings.page).then(pg => processButtons(element, pg, userRole));
         }
         else if (action instanceof microflows.ShowHomePageAction) {
@@ -265,7 +265,7 @@ function processAction(mfObj: microflows.IMicroflowObject, element, userRole: se
             element["children"].push(child);
             return;
         } else if (action instanceof microflows.MicroflowCallAction) {
-            console.log(`microflow action to open microflow ${action.microflowCall.microflow.name}`);
+            console.log(`Microflow action to open microflow ${action.microflowCall.microflow.name}`);
             return loadMicroflow(action.microflowCall.microflow).then(mf => traverseMicroflow(mf, element, userRole));
         }
     }
@@ -294,9 +294,9 @@ function loadMicroflow(microflow: microflows.IMicroflow): when.Promise<microflow
 function traverseMicroflow(microflow: microflows.Microflow, element, userRole: security.UserRole): when.Promise<void> {
     if (checkMicroflowSecurity(microflow, userRole)) {
         console.log(`Traversing Microflow for: ${microflow.name}`);
+        var child = { name: microflow.name, children: [], parent: element.name };
+        element["children"].push(child);
         if (!checkIfInElement(microflow.name, element)) {
-            var child = { name: microflow.name, children: [], parent: element.name };
-            element["children"].push(child);
             return traverseMicroflowActions(microflow.objectCollection.objects.filter(o => o instanceof microflows.ActionActivity), child, userRole);
         } else {
             return;
