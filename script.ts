@@ -115,6 +115,7 @@ function loadProjectSecurity(workingCopy: OnlineWorkingCopy): when.Promise<secur
 function loadAllUserNavigation(userRoles: security.UserRole[]): when.Promise<security.UserRole[]> {
     jsonObj[`name`] = "User Roles";
     jsonObj[`children`] = [];
+    jsonObj[`parent`] = null;
     return when.all<security.UserRole[]>(userRoles.map(processUsersNavigation));
 }
 function getAllUserRoles(projectSecurity: security.ProjectSecurity): security.UserRole[] {
@@ -123,7 +124,7 @@ function getAllUserRoles(projectSecurity: security.ProjectSecurity): security.Us
 
 function processUsersNavigation(role: security.UserRole): when.Promise<void> {
     var nav = role.model.allNavigationDocuments()[0];
-    var child = { name: role.name, children: [] };
+    var child = { name: role.name, children: [], parent: "User Roles" };
     jsonObj[`children`].push(child);
     console.log(`Processing user navigation for: ${role.name}`);
     return loadNavigation(nav).then(loadedNav => processNavigation(role, loadedNav, child));
@@ -180,9 +181,13 @@ function getStructures(pageLoaded: pages.Page, element): IStructure[] {
 function processButtons(element, page: pages.Page, userRole: security.UserRole): when.Promise<void> {
     if (checkPageSecurity(page, userRole)) {
         var buttons = getStructures(page, element);
-        var child = { name: page.name, children: [] };
-        element["children"].push(child);
-        return when.all<void>(buttons.map(btn => traverseElement(child, btn, userRole)));
+        if (!checkIfInElement(page.name, element)) {
+            var child = { name: page.name, children: [], parent: element.name };
+            element["children"].push(child);
+            return when.all<void>(buttons.map(btn => traverseElement(child, btn, userRole)));
+        } else {
+            return;
+        }
     } else {
         return;
     }
@@ -229,7 +234,17 @@ function processButton(button: pages.Button, element, userRole: security.UserRol
     } else if (button instanceof pages.DropDownButton) {
 
     } else if (button instanceof pages.NewButton) {
-        return loadPage(button.pageSettings.page).then(pg =>processButtons(element, pg, userRole));
+        return loadPage(button.pageSettings.page).then(pg => {
+            var entity = button.entity;
+            loadAsPromise(entity).then(ent => {
+                if (checkEntitySecurityCanCreate(ent, userRole)) {
+                    return processButtons(element, pg, userRole);
+                } else {
+                    return;
+                }
+            });
+        });
+
     }
 }
 
@@ -246,7 +261,7 @@ function processAction(mfObj: microflows.IMicroflowObject, element, userRole: se
             return loadPage(action.pageSettings.page).then(pg => processButtons(element, pg, userRole));
         }
         else if (action instanceof microflows.ShowHomePageAction) {
-            var child = { name: "ShowHomepage", children: [] };
+            var child = { name: "ShowHomepage", children: [], parent: element.name };
             element["children"].push(child);
             return;
         } else if (action instanceof microflows.MicroflowCallAction) {
@@ -279,9 +294,13 @@ function loadMicroflow(microflow: microflows.IMicroflow): when.Promise<microflow
 function traverseMicroflow(microflow: microflows.Microflow, element, userRole: security.UserRole): when.Promise<void> {
     if (checkMicroflowSecurity(microflow, userRole)) {
         console.log(`Traversing Microflow for: ${microflow.name}`);
-        var child = { name: microflow.name, children: [] };
-        element["children"].push(child);
-        return traverseMicroflowActions(microflow.objectCollection.objects.filter(o => o instanceof microflows.ActionActivity), child, userRole);
+        if (!checkIfInElement(microflow.name, element)) {
+            var child = { name: microflow.name, children: [], parent: element.name };
+            element["children"].push(child);
+            return traverseMicroflowActions(microflow.objectCollection.objects.filter(o => o instanceof microflows.ActionActivity), child, userRole);
+        } else {
+            return;
+        }
     } else {
         return;
     }
@@ -334,5 +353,12 @@ function checkEntitySecurityCanDelete(entity: domainmodels.Entity, userRole: sec
             }
         });
     });
+    return false;
+}
+
+function checkIfInElement(newElement: String, element): boolean {
+    if (element.parent === newElement) {
+        return true;
+    }
     return false;
 }
