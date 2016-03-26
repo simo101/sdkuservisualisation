@@ -51,7 +51,11 @@ var vis = d3.select("#body").append("svg:svg")
     .attr("width", w + m[1] + m[3])
     .attr("height", h + m[0] + m[2])
   .append("svg:g")
+    .attr("class","drawarea")
+  .append("svg:g")
     .attr("transform", "translate(" + m[3] + "," + m[0] + ")");
+  
+    
 
 d3.json("./mendix.json", function(json) {
   root = json;
@@ -161,6 +165,12 @@ function update(source) {
     d.x0 = d.x;
     d.y0 = d.y;
   });
+  
+  d3.select("svg")
+        .call(d3.behavior.zoom()
+              .scaleExtent([0.5, 5])
+              .on("zoom", zoom));
+  
 }
 
 // Toggle children.
@@ -172,6 +182,23 @@ function toggle(d) {
     d.children = d._children;
     d._children = null;
   }
+}
+
+function zoom() {
+    var scale = d3.event.scale,
+        translation = d3.event.translate,
+        tbound = -h * scale,
+        bbound = h * scale,
+        lbound = (-w + m[1]) * scale,
+        rbound = (w - m[3]) * scale;
+    // limit translation to thresholds
+    translation = [
+        Math.max(Math.min(translation[0], rbound), lbound),
+        Math.max(Math.min(translation[1], bbound), tbound)
+    ];
+    d3.select(".drawarea")
+        .attr("transform", "translate(" + translation + ")" +
+              " scale(" + scale + ")");
 }
 
     </script>
