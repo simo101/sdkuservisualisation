@@ -3,18 +3,13 @@
 import { MendixSdkClient, OnlineWorkingCopy, Project, Revision, Branch, loadAsPromise } from "mendixplatformsdk";
 import { ModelSdkClient, IModel, projects, domainmodels, microflows, pages, navigation, texts, security, IStructure, menus } from "mendixmodelsdk";
 import when = require('when');
-//const readlineSync = require('readline-sync');
-
-/*
- * CREDENTIALS
- */
 var fs = require('fs');
 var ws = fs.createWriteStream('./web/mendix.json');
 
 const jsonObj = {};
 
 const username = "{{UserName}}";
-const apikey = "{{ApiKey}}";
+const apikey = "{{APIKEY}}";
 const projectId = "{{ProjectID}}";
 const projectName = "{{ProjectName}}";
 const revNo = -1; // -1 for latest
@@ -56,43 +51,53 @@ client.platform().createOnlineWorkingCopy(project, new Revision(revNo, new Branc
     }
     );
 
-
-
+/**
+* This function picks the first navigation document in the project.
+*/
 function pickNavigationDocument(workingCopy: OnlineWorkingCopy): navigation.INavigationDocument {
     return workingCopy.model().allNavigationDocuments()[0];
 }
-
+/**
+* This function processes a given user navigation
+*/
 function processNavigation(role: security.UserRole, navDoc: navigation.NavigationDocument, element): when.Promise<void> {
     let usersHomepage = navDoc.desktopProfile.roleBasedHomePages.filter(roleBasedHomepage => roleBasedHomepage.userRole.name === role.name)[0];
     if (usersHomepage != null) {
         if (usersHomepage.page != null) {
             console.log(`${role.name} homepage = ${usersHomepage.page.name}`);
-            return loadPage(usersHomepage.page).then(pg => processButtons(element, pg, role)).then(_ => {
+            return loadAsPromise(usersHomepage.page).then(pg => processButtons(element, pg, role)).then(_ => {
                 return processOtherNavigation(navDoc, element, role);
             });
         } else if (usersHomepage.microflow != null) {
             console.log(`${role.name} homepage = ${usersHomepage.microflow.name}`);
-            return loadMicroflow(usersHomepage.microflow).then(mf => traverseMicroflow(mf, element, role)).then(_ => {
+            return loadAsPromise(usersHomepage.microflow).then(mf => traverseMicroflow(mf, element, role)).then(_ => {
                 return processOtherNavigation(navDoc, element, role);
             });
         }
     }
 };
-
+/**
+* This function processes the other users navigation
+*/
 function processOtherNavigation(navDoc: navigation.NavigationDocument, element, userRole): when.Promise<void> {
     var items = navDoc.desktopProfile.menuItemCollection.items;
     return when.all<void>(items.map(item => processItem(item, element, userRole)));
 }
-
+/**
+* This function processes a menu item.
+*/
 function processItem(item: menus.MenuItem, element, role: security.UserRole): when.Promise<void> {
     var action = item.action;
     if (action instanceof pages.PageClientAction) {
-        return loadPage(action.pageSettings.page).then(pg => processButtons(element, pg, role))
+        return loadAsPromise(action.pageSettings.page).then(pg => processButtons(element, pg, role))
     } else if (action instanceof pages.MicroflowClientAction) {
-        return loadMicroflow(action.microflowSettings.microflow).then(mf => traverseMicroflow(mf, element, role));
+        return loadAsPromise(action.microflowSettings.microflow).then(mf => traverseMicroflow(mf, element, role));
     }
 }
 
+/**
+* This function loads the project security.
+*/
 function loadProjectSecurity(workingCopy: OnlineWorkingCopy): when.Promise<security.ProjectSecurity> {
     var security = workingCopy.model().allProjectSecurities()[0];
     return when.promise<security.ProjectSecurity>((resolve, reject) => {
@@ -111,7 +116,9 @@ function loadProjectSecurity(workingCopy: OnlineWorkingCopy): when.Promise<secur
         }
     });
 }
-
+/**
+* This function loads all the users navigation
+*/
 function loadAllUserNavigation(userRoles: security.UserRole[]): when.Promise<security.UserRole[]> {
     jsonObj[`name`] = "User Roles";
     jsonObj[`children`] = [];
@@ -121,52 +128,20 @@ function loadAllUserNavigation(userRoles: security.UserRole[]): when.Promise<sec
 function getAllUserRoles(projectSecurity: security.ProjectSecurity): security.UserRole[] {
     return projectSecurity.userRoles;
 }
-
+/**
+* This function processes the navigation for a given user.
+*/
 function processUsersNavigation(role: security.UserRole): when.Promise<void> {
     var nav = role.model.allNavigationDocuments()[0];
     var child = { name: role.name, children: [], parent: "User Roles" };
     jsonObj[`children`].push(child);
     console.log(`Processing user navigation for: ${role.name}`);
-    return loadNavigation(nav).then(loadedNav => processNavigation(role, loadedNav, child));
+    return loadAsPromise(nav).then(loadedNav => processNavigation(role, loadedNav, child));
 }
 
-function loadNavigation(nav: navigation.INavigationDocument): when.Promise<navigation.NavigationDocument> {
-    return when.promise<navigation.NavigationDocument>((resolve, reject) => {
-        if (nav) {
-            nav.load(navDoc => {
-                if (navDoc) {
-                    console.log(`Loaded navDoc`);
-                    resolve(navDoc);
-                } else {
-                    console.log(`Failed to load navDoc`);
-                    reject(`Failed to load navDoc`);
-                }
-            });
-        } else {
-            reject(`'nav' is undefined`);
-        }
-    });
-}
-
-function loadPage(page: pages.IPage): when.Promise<pages.Page> {
-    return when.promise<pages.Page>((resolve, reject) => {
-        if (page) {
-            console.log(`Loading page: ${page.qualifiedName}`);
-            page.load(mf => {
-                if (mf) {
-                    console.log(`Loaded page: ${page.qualifiedName}`);
-                    resolve(mf);
-                } else {
-                    console.log(`Failed to load page: ${page.qualifiedName}`);
-                    reject(`Failed to load page: ${page.qualifiedName}`);
-                }
-            });
-        } else {
-            reject(`'page' is undefined`);
-        }
-    });
-}
-
+/**
+* This function gets all the buttons that are available on a page and returns them.
+*/
 function getStructures(pageLoaded: pages.Page, element): IStructure[] {
 
     var buttons = [];
@@ -178,6 +153,9 @@ function getStructures(pageLoaded: pages.Page, element): IStructure[] {
     return buttons;
 }
 
+/**
+* This function processes a button and adds it to the jsonObj.
+*/
 function processButtons(element, page: pages.Page, userRole: security.UserRole): when.Promise<void> {
     if (checkPageSecurity(page, userRole)) {
         var buttons = getStructures(page, element);
@@ -193,7 +171,9 @@ function processButtons(element, page: pages.Page, userRole: security.UserRole):
     }
 
 }
-
+/**
+* This function traverses a page element
+*/
 function traverseElement(element, structure: IStructure, userRole: security.UserRole): when.Promise<void> {
     if (structure != null) {
         if (structure instanceof pages.Button) {
@@ -203,38 +183,42 @@ function traverseElement(element, structure: IStructure, userRole: security.User
         }
     }
 }
-
+/**
+* This function is used to process a control bar button
+*/
 function processControlBarButton(button: pages.ControlBarButton, element, userRole: security.UserRole): when.Promise<void> {
     if (button instanceof pages.GridEditButton) {
-        return loadPage(button.pageSettings.page).then(pg => processButtons(element, pg, userRole));
+        return loadAsPromise(button.pageSettings.page).then(pg => processButtons(element, pg, userRole));
     } else if (button instanceof pages.DataViewActionButton) {
         var action = button.action;
         if (action instanceof pages.MicroflowClientAction) {
-            return loadMicroflow(action.microflowSettings.microflow).then(mf => traverseMicroflow(mf, element, userRole));
+            return loadAsPromise(action.microflowSettings.microflow).then(mf => traverseMicroflow(mf, element, userRole));
         } else if (action instanceof pages.PageClientAction) {
-            return loadPage(action.pageSettings.page).then(pg => processButtons(element, pg, userRole));
+            return loadAsPromise(action.pageSettings.page).then(pg => processButtons(element, pg, userRole));
         }
     }
 }
 
-
+/**
+* This function is used to processes a button found on a page. Depending on the button type it will process the button differently.
+*/
 function processButton(button: pages.Button, element, userRole: security.UserRole): when.Promise<void> {
     if (button instanceof pages.ActionButton) {
         var action = button.action;
         if (action instanceof pages.MicroflowClientAction) {
             if (action.microflowSettings.microflow != null) {
-                return loadMicroflow(action.microflowSettings.microflow).then(mf => traverseMicroflow(mf, element, userRole));
+                return loadAsPromise(action.microflowSettings.microflow).then(mf => traverseMicroflow(mf, element, userRole));
             }
         }
         else if (action instanceof pages.PageClientAction) {
             if (action.pageSettings.page != null) {
-                return loadPage(action.pageSettings.page).then(pg => processButtons(element, pg, userRole));
+                return loadAsPromise(action.pageSettings.page).then(pg => processButtons(element, pg, userRole));
             }
         }
     } else if (button instanceof pages.DropDownButton) {
 
     } else if (button instanceof pages.NewButton) {
-        return loadPage(button.pageSettings.page).then(pg => {
+        return loadAsPromise(button.pageSettings.page).then(pg => {
             var entity = button.entity;
             loadAsPromise(entity).then(ent => {
                 if (checkEntitySecurityCanCreate(ent, userRole)) {
@@ -247,18 +231,22 @@ function processButton(button: pages.Button, element, userRole: security.UserRol
 
     }
 }
-
+/**
+* This function traverses all the microflow actions that are passed to it and returns once all actions are processed.
+*/
 function traverseMicroflowActions(actions: microflows.IMicroflowObject[], element, userRole: security.UserRole): when.Promise<void> {
     return when.all<void>(actions.map(act => processAction(act, element, userRole)));
 }
-
+/**
+* This function checks what the type of microflow action is either a show page, show homepage or microflow call. Then processes accordingly.
+*/
 function processAction(mfObj: microflows.IMicroflowObject, element, userRole: security.UserRole): when.Promise<void> {
     if (mfObj instanceof microflows.ActionActivity) {
 
         var action = mfObj.action;
         if (action instanceof microflows.ShowPageAction) {
             console.log(`Microflow action to open page ${action.pageSettings.page.name}`);
-            return loadPage(action.pageSettings.page).then(pg => processButtons(element, pg, userRole));
+            return loadAsPromise(action.pageSettings.page).then(pg => processButtons(element, pg, userRole));
         }
         else if (action instanceof microflows.ShowHomePageAction) {
             var child = { name: "ShowHomepage", children: [], parent: element.name };
@@ -266,31 +254,13 @@ function processAction(mfObj: microflows.IMicroflowObject, element, userRole: se
             return;
         } else if (action instanceof microflows.MicroflowCallAction) {
             console.log(`Microflow action to open microflow ${action.microflowCall.microflow.name}`);
-            return loadMicroflow(action.microflowCall.microflow).then(mf => traverseMicroflow(mf, element, userRole));
+            return loadAsPromise(action.microflowCall.microflow).then(mf => traverseMicroflow(mf, element, userRole));
         }
     }
 }
-
-
-function loadMicroflow(microflow: microflows.IMicroflow): when.Promise<microflows.Microflow> {
-    return when.promise<microflows.Microflow>((resolve, reject) => {
-        if (microflow) {
-            console.log(`Loading microflow: ${microflow.qualifiedName}`);
-            microflow.load(mf => {
-                if (mf) {
-                    console.log(`Loaded microflow: ${microflow.qualifiedName}`);
-                    resolve(mf);
-                } else {
-                    console.log(`Failed to load microflow: ${microflow.qualifiedName}`);
-                    reject(`Failed to load microflow: ${microflow.qualifiedName}`);
-                }
-            });
-        } else {
-            reject(`'microflow' is undefined`);
-        }
-    });
-}
-
+/**
+* This function traverses a microflow to find all actions that either open up a page or sub microflow
+*/
 function traverseMicroflow(microflow: microflows.Microflow, element, userRole: security.UserRole): when.Promise<void> {
     if (checkMicroflowSecurity(microflow, userRole)) {
         console.log(`Traversing Microflow for: ${microflow.name}`);
@@ -307,6 +277,9 @@ function traverseMicroflow(microflow: microflows.Microflow, element, userRole: s
 
 }
 
+/**
+* This function checks to see if the given user role has access to the given page.
+*/
 function checkPageSecurity(page: pages.Page, userRole: security.UserRole): boolean {
     var moduleRolesAllowed = page.allowedRolesQualifiedNames;
     var userRolesModuleRoles = userRole.moduleRolesQualifiedNames;
@@ -317,6 +290,10 @@ function checkPageSecurity(page: pages.Page, userRole: security.UserRole): boole
     });
     return true;
 }
+
+/**
+* This function checks whether the given role is able to execute the given microflow.
+*/
 function checkMicroflowSecurity(microflow: microflows.Microflow, userRole: security.UserRole): boolean {
     var moduleRolesAllowed = microflow.allowedModuleRolesQualifiedNames;
     var userRolesModuleRoles = userRole.moduleRolesQualifiedNames;
@@ -327,7 +304,9 @@ function checkMicroflowSecurity(microflow: microflows.Microflow, userRole: secur
     });
     return true;
 }
-
+/**
+* This function checks to see whether a given user role is able to create the given entity.
+*/
 function checkEntitySecurityCanCreate(entity: domainmodels.Entity, userRole: security.UserRole): boolean {
     var accessRules = entity.accessRules;
     var userRolesModuleRoles = userRole.moduleRolesQualifiedNames;
@@ -342,6 +321,9 @@ function checkEntitySecurityCanCreate(entity: domainmodels.Entity, userRole: sec
     return false;
 }
 
+/**
+* This function checks to see if the user role has access to delete the given entity.
+*/
 function checkEntitySecurityCanDelete(entity: domainmodels.Entity, userRole: security.UserRole): boolean {
     var accessRules = entity.accessRules;
     var userRolesModuleRoles = userRole.moduleRolesQualifiedNames;
@@ -356,6 +338,10 @@ function checkEntitySecurityCanDelete(entity: domainmodels.Entity, userRole: sec
     return false;
 }
 
+/**
+* This function checks to see if the new element already exists in the jsonObj.
+* Returns true if the element exists as a parent of the current element.
+*/
 function checkIfInElement(newElement: String, element): boolean {
     if (element.parent === newElement) {
         return true;
