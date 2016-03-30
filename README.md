@@ -7,6 +7,13 @@ To install the sdkuservisualisation you should type the command:
 `npm install`
 
 This is will install the sdk visualisation and all the relevant dependencies.
+
+Then type:
+
+`tsd install`
+
+This will install all the necessary typings.
+
 To connect it to your project you need to change the following constants in the `script.ts`
 
 `var username = "{{Username}}";`
