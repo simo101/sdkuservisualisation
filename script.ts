@@ -8,8 +8,8 @@ var ws = fs.createWriteStream('./web/mendix.json');
 
 const jsonObj = {};
 
-const username = "{{UserName}}";
-const apikey = "{{APIKey}}";
+const username = "{{Username}}";
+const apikey = "{{ApiKey}}";
 const projectId = "{{ProjectID}}";
 const projectName = "{{ProjectName}}";
 const revNo = -1; // -1 for latest
@@ -190,7 +190,7 @@ function getStructures(structure: IStructure): IStructure[] {
 
     var structures = [];
     structure.traverse(function(structure) {
-        if (structure instanceof pages.Button || structure instanceof pages.ControlBarButton || structure instanceof pages.ListView || structure instanceof pages.Snippet) {
+        if (structure instanceof pages.Button || structure instanceof pages.ControlBarButton || structure instanceof pages.ListView || structure instanceof pages.SnippetCallWidget) {
             structures.push(structure);
         }
     });
@@ -248,8 +248,8 @@ function traverseElement(element, structure: IStructure, userRole: security.User
             return processControlBarButton(structure, element, userRole);
         } else if (structure instanceof pages.ListView) {
             return processListView(structure, element, userRole);
-        } else if (structure instanceof pages.Snippet){
-            return processSnippet(structure,element,userRole);
+        } else if (structure instanceof pages.SnippetCallWidget) {
+            return processSnippet(structure, element, userRole);
         }
     } else {
         return;
@@ -281,11 +281,16 @@ function processListView(listView: pages.ListView, element, userRole: security.U
     }
 }
 
-function processSnippet(snippet: pages.Snippet, element, userRole: security.UserRole): when.Promise<void> {
-    if (snippet != null) {
-        var structures = getStructures(snippet);
-        if (structures.length > 0) {
-            return when.all<void>(structures.map(strut => traverseElement(element, strut, userRole)));
+function processSnippet(snippetCallWidget: pages.SnippetCallWidget, element, userRole: security.UserRole): when.Promise<void> {
+    if (snippetCallWidget != null) {
+        var snippetCall = snippetCallWidget.snippetCall;
+        if (snippetCall != null) {
+            var snippet = snippetCall.snippet;
+            if (snippet != null) {
+                return loadAsPromise(snippet).then(snip => processSnippetStructures(element,userRole,snip));
+            } else {
+                return;
+            }
         } else {
             return;
         }
@@ -293,6 +298,18 @@ function processSnippet(snippet: pages.Snippet, element, userRole: security.User
         return;
     }
 
+}
+
+/**
+ * Process snippet Structures
+ */
+function processSnippetStructures(element, userRole: security.UserRole,snip:pages.Snippet): when.Promise<void> {
+    var structures = getStructures(snip);
+    if (structures.length > 0) {
+        return when.all<void>(structures.map(strut => traverseElement(element, strut, userRole)));
+    } else {
+        return;
+    }
 }
 
 /**
