@@ -9,7 +9,7 @@ var ws = fs.createWriteStream('./web/mendix.json');
 const jsonObj = {};
 
 const username = "{{UserName}}";
-const apikey = "{{ApiKey}}";
+const apikey = "{{APIKey}}";
 const projectId = "{{ProjectID}}";
 const projectName = "{{ProjectName}}";
 const revNo = -1; // -1 for latest
@@ -65,7 +65,7 @@ function processNavigation(role: security.UserRole, navDoc: navigation.Navigatio
     if (usersHomepage != null) {
         if (usersHomepage.page != null) {
             console.log(`${role.name} homepage = ${usersHomepage.page.name}`);
-            return loadAsPromise(usersHomepage.page).then(pg => processButtons(element, pg, role)).then(_ => {
+            return loadAsPromise(usersHomepage.page).then(pg => processStructures(element, pg, role, false)).then(_ => {
                 return processOtherNavigation(navDoc, element, role);
             });
         } else if (usersHomepage.microflow != null) {
@@ -82,7 +82,7 @@ function processNavigation(role: security.UserRole, navDoc: navigation.Navigatio
         if (defaultHomepage != null) {
             if (defaultHomepage.page != null) {
                 console.log(`${role.name} homepage = ${defaultHomepage.page.name}`);
-                return loadAsPromise(defaultHomepage.page).then(pg => processButtons(element, pg, role)).then(_ => {
+                return loadAsPromise(defaultHomepage.page).then(pg => processStructures(element, pg, role, false)).then(_ => {
                     return processOtherNavigation(navDoc, element, role);
                 });
             } else if (defaultHomepage.microflow != null) {
@@ -119,7 +119,7 @@ function processItem(item: menus.MenuItem, element, role: security.UserRole): wh
     if (action != null) {
         if (action instanceof pages.PageClientAction) {
             if (action.pageSettings.page != null) {
-                return loadAsPromise(action.pageSettings.page).then(pg => processButtons(element, pg, role));
+                return loadAsPromise(action.pageSettings.page).then(pg => processStructures(element, pg, role, false));
             } else {
                 return;
             }
@@ -184,42 +184,57 @@ function processUsersNavigation(role: security.UserRole): when.Promise<void> {
 }
 
 /**
-* This function gets all the buttons that are available on a page and returns them.
+* Traverses a given structure and returns all buttons, controlbar buttons and listviews
 */
-function getStructures(pageLoaded: pages.Page, element): IStructure[] {
+function getStructures(structure: IStructure): IStructure[] {
 
-    var buttons = [];
-    pageLoaded.traverse(function(structure) {
-        if (structure instanceof pages.Button || structure instanceof pages.ControlBarButton) {
-            buttons.push(structure);
+    var structures = [];
+    structure.traverse(function(structure) {
+        if (structure instanceof pages.Button || structure instanceof pages.ControlBarButton || structure instanceof pages.ListView || structure instanceof pages.Snippet) {
+            structures.push(structure);
         }
     });
-    return buttons;
+    return structures;
 }
 
 /**
 * This function processes a button and adds it to the jsonObj.
 */
-function processButtons(element, page: pages.Page, userRole: security.UserRole): when.Promise<void> {
+function processStructures(element, page: pages.Page, userRole: security.UserRole, calledFromMicroflow: boolean): when.Promise<void> {
     if (page != null) {
-        if (checkPageSecurity(page, userRole)) {
-            var buttons = getStructures(page, element);
-
-            if (buttons.length > 0) {
-                if (!checkIfInElement(page.name, element)) {
-                    var child = { name: page.name, children: [], parent: element.name };
-                    element["children"].push(child);
-                    return when.all<void>(buttons.map(btn => traverseElement(child, btn, userRole)));
+        if (calledFromMicroflow) {
+            var structures = getStructures(page);
+            if (!checkIfInElement(page.name, element)) {
+                var child = { name: page.name, children: [], parent: element.name };
+                element["children"].push(child);
+                if (structures.length > 0) {
+                    return when.all<void>(structures.map(strut => traverseElement(child, strut, userRole)));
                 } else {
                     return;
                 }
             }
-            else {
+        } else {
+            if (checkPageSecurity(page, userRole)) {
+                var structures = getStructures(page);
+                if (!checkIfInElement(page.name, element)) {
+                    var child = { name: page.name, children: [], parent: element.name };
+                    element["children"].push(child);
+                    if (structures.length > 0) {
+                        return when.all<void>(structures.map(strut => traverseElement(child, strut, userRole)));
+                    } else {
+                        return;
+                    }
+                }
+                else {
+                    return;
+                }
+            } else {
                 return;
             }
-        } else {
-            return;
         }
+
+    } else {
+        return;
     }
 }
 /**
@@ -231,18 +246,62 @@ function traverseElement(element, structure: IStructure, userRole: security.User
             return processButton(structure, element, userRole);
         } else if (structure instanceof pages.ControlBarButton) {
             return processControlBarButton(structure, element, userRole);
+        } else if (structure instanceof pages.ListView) {
+            return processListView(structure, element, userRole);
+        } else if (structure instanceof pages.Snippet){
+            return processSnippet(structure,element,userRole);
         }
     } else {
         return;
     }
 }
 /**
+ * This Function processes the listview structure.
+ */
+function processListView(listView: pages.ListView, element, userRole: security.UserRole): when.Promise<void> {
+    if (listView.clickAction != null) {
+        var action = listView.clickAction;
+        if (action instanceof pages.MicroflowClientAction) {
+            if (action.microflowSettings.microflow != null) {
+                return loadAsPromise(action.microflowSettings.microflow).then(mf => traverseMicroflow(mf, element, userRole));
+            } else {
+                return;
+            }
+        } else if (action instanceof pages.PageClientAction) {
+            if (action.pageSettings.page != null) {
+                return loadAsPromise(action.pageSettings.page).then(pg => processStructures(element, pg, userRole, false));
+            } else {
+                return;
+            }
+        } else {
+            return;
+        }
+    } else {
+        return;
+    }
+}
+
+function processSnippet(snippet: pages.Snippet, element, userRole: security.UserRole): when.Promise<void> {
+    if (snippet != null) {
+        var structures = getStructures(snippet);
+        if (structures.length > 0) {
+            return when.all<void>(structures.map(strut => traverseElement(element, strut, userRole)));
+        } else {
+            return;
+        }
+    } else {
+        return;
+    }
+
+}
+
+/**
 * This function is used to process a control bar button
 */
 function processControlBarButton(button: pages.ControlBarButton, element, userRole: security.UserRole): when.Promise<void> {
     if (button instanceof pages.GridEditButton) {
         if (button.pageSettings.page != null) {
-            return loadAsPromise(button.pageSettings.page).then(pg => processButtons(element, pg, userRole));
+            return loadAsPromise(button.pageSettings.page).then(pg => processStructures(element, pg, userRole, false));
         } else {
             return;
         }
@@ -258,7 +317,7 @@ function processControlBarButton(button: pages.ControlBarButton, element, userRo
                 }
             } else if (action instanceof pages.PageClientAction) {
                 if (action.pageSettings.page != null) {
-                    return loadAsPromise(action.pageSettings.page).then(pg => processButtons(element, pg, userRole));
+                    return loadAsPromise(action.pageSettings.page).then(pg => processStructures(element, pg, userRole, false));
                 } else {
                     return;
                 }
@@ -284,7 +343,7 @@ function processButton(button: pages.Button, element, userRole: security.UserRol
             }
             else if (action instanceof pages.PageClientAction) {
                 if (action.pageSettings.page != null) {
-                    return loadAsPromise(action.pageSettings.page).then(pg => processButtons(element, pg, userRole));
+                    return loadAsPromise(action.pageSettings.page).then(pg => processStructures(element, pg, userRole, true));
                 }
             }
         } else {
@@ -298,7 +357,7 @@ function processButton(button: pages.Button, element, userRole: security.UserRol
             if (entity != null) {
                 loadAsPromise(entity).then(ent => {
                     if (checkEntitySecurityCanCreate(ent, userRole)) {
-                        return processButtons(element, pg, userRole);
+                        return processStructures(element, pg, userRole, false);
                     } else {
                         return;
                     }
@@ -328,7 +387,7 @@ function processAction(mfObj: microflows.IMicroflowObject, element, userRole: se
             if (action instanceof microflows.ShowPageAction) {
                 console.log(`Microflow action to open page ${action.pageSettings.page.name}`);
                 if (action.pageSettings.page != null) {
-                    return loadAsPromise(action.pageSettings.page).then(pg => processButtons(element, pg, userRole));
+                    return loadAsPromise(action.pageSettings.page).then(pg => processStructures(element, pg, userRole, true));
                 } else {
                     return;
                 }
