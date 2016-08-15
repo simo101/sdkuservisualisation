@@ -18,7 +18,7 @@
   },
   "homepage": "https://github.com/simo101/sdkuservisualisation",
   "dependencies": {
-    "mendixmodelsdk": "^2.3.0",
+    "mendixmodelsdk": "^2.6.3",
     "mendixplatformsdk": "^2.0.0",
     "when": "^3.7.7",
     "node": "^0.0.0",

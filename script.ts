@@ -1,17 +1,21 @@
 /// <reference path='./typings/tsd.d.ts' />
 
+'use strict';
+
 import { MendixSdkClient, OnlineWorkingCopy, Project, Revision, Branch, loadAsPromise } from "mendixplatformsdk";
 import { ModelSdkClient, IModel, projects, domainmodels, microflows, pages, navigation, texts, security, IStructure, menus } from "mendixmodelsdk";
+
+
 import when = require('when');
 var fs = require('fs');
 var ws = fs.createWriteStream('./web/mendix.json');
 
 const jsonObj = {};
 
-const username = "{{Username}}";
-const apikey = "{{ApiKey}}";
-const projectId = "{{ProjectID}}";
-const projectName = "{{ProjectName}}";
+const username = "{{userName}}";
+const apikey = "{{apikey}}";
+const projectId = "{{projectId}}";
+const projectName = "{{projectName}}";
 const revNo = -1; // -1 for latest
 const branchName = null // null for mainline
 const wc = null;
@@ -205,7 +209,7 @@ function processStructures(element, page: pages.Page, userRole: security.UserRol
         if (calledFromMicroflow) {
             var structures = getStructures(page);
             if (!checkIfInElement(page.name, element)) {
-                var child = { name: page.name, children: [], parent: element.name };
+                var child = { name: page.name, children: [], parent: element.name + ","+ element.parent };
                 element["children"].push(child);
                 if (structures.length > 0) {
                     return when.all<void>(structures.map(strut => traverseElement(child, strut, userRole)));
@@ -217,7 +221,7 @@ function processStructures(element, page: pages.Page, userRole: security.UserRol
             if (checkPageSecurity(page, userRole)) {
                 var structures = getStructures(page);
                 if (!checkIfInElement(page.name, element)) {
-                    var child = { name: page.name, children: [], parent: element.name };
+                    var child = { name: page.name, children: [], parent: element.name + ","+ element.parent };
                     element["children"].push(child);
                     if (structures.length > 0) {
                         return when.all<void>(structures.map(strut => traverseElement(child, strut, userRole)));
@@ -360,7 +364,7 @@ function processButton(button: pages.Button, element, userRole: security.UserRol
             }
             else if (action instanceof pages.PageClientAction) {
                 if (action.pageSettings.page != null) {
-                    return loadAsPromise(action.pageSettings.page).then(pg => processStructures(element, pg, userRole, true));
+                    return loadAsPromise(action.pageSettings.page).then(pg => processStructures(element, pg, userRole, false));
                 }
             }
         } else {
@@ -410,7 +414,7 @@ function processAction(mfObj: microflows.IMicroflowObject, element, userRole: se
                 }
             }
             else if (action instanceof microflows.ShowHomePageAction) {
-                var child = { name: "ShowHomepage", children: [], parent: element.name };
+                var child = { name: "ShowHomepage", children: [], parent: element.name + ","+ element.parent };
                 element["children"].push(child);
                 return;
             } else if (action instanceof microflows.MicroflowCallAction) {
@@ -434,7 +438,7 @@ function traverseMicroflow(microflow: microflows.Microflow, element, userRole: s
     if (checkMicroflowSecurity(microflow, userRole)) {
         console.log(`Traversing Microflow for: ${microflow.name}`);
         if (!checkIfInElement(microflow.name, element)) {
-            var child = { name: microflow.name, children: [], parent: element.name };
+            var child = { name: microflow.name, children: [], parent: element.name + + ","+ element.parent };
             element["children"].push(child);
             return traverseMicroflowActions(microflow.objectCollection.objects.filter(o => o instanceof microflows.ActionActivity), child, userRole);
         } else {
@@ -528,7 +532,7 @@ function checkEntitySecurityCanDelete(entity: domainmodels.Entity, userRole: sec
 * This function also checks to see if it exists a child already.
 */
 function checkIfInElement(newElement: String, element): boolean {
-    if (element.parent === newElement || checkIfInChildren(newElement, element)) {
+    if (element.parent.includes(newElement) || checkIfInChildren(newElement, element)) {
         return true;
     }
     return false;
@@ -543,3 +547,6 @@ function checkIfInChildren(newElement: String, element): boolean {
     }
     return false;
 }
+
+
+
